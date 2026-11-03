@@ -30,7 +30,7 @@
 
 저장소 [lakesoft-develop/takgu-score](https://github.com/lakesoft-develop/takgu-score)의 `main` 브랜치를 GitHub Pages로 내보냅니다. 오프라인 실행과 화면 꺼짐 방지는 HTTPS에서만 동작해서 HTTPS 주소가 필요합니다.
 
-> Netlify(`takgu-score.netlify.app`)에도 처음에 올렸습니다. 하지만 무료 플랜에서는 숨길 수 없는 「Powered by Netlify」 배지가 오른쪽 아래 탭 영역을 가려서 GitHub Pages로 옮겼습니다(`screenshots/14-netlify-badge.png`).
+> 처음에는 Netlify에 올렸습니다. 하지만 무료 플랜에서는 숨길 수 없는 「Powered by Netlify」 배지가 오른쪽 아래 탭 영역을 가려서 GitHub Pages로 옮기고 Netlify 사이트는 지웠습니다(`screenshots/14-netlify-badge.png`).
 
 ## 설치 방법
 
