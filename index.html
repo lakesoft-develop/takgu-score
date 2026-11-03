@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>탁구 스코어</title>
+<meta name="description" content="탁구 경기 점수판 — 11점 듀스, 서브 순서, 게임 스코어를 자동으로 계산해요.">
+<meta name="theme-color" content="#0A0B0E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="탁구 스코어">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{
+  --bg:#0A0B0E;
+  --surface:#14161B;
+  --surface-hi:#1C1F26;
+  --seg-on:#2B2F38;
+  --line:rgba(255,255,255,.07);
+  --text:#F5F6F8;
+  --muted:#868B96;
+  --faint:#3A3F48;
+  --a:#FF5A4E; --a-soft:rgba(255,90,78,.17);
+  --b:#3E8BFF; --b-soft:rgba(62,139,255,.17);
+  --ok:#30D158;
+  --sheet:#16181E;
+  --backdrop:rgba(0,0,0,.6);
+  --shadow:0 20px 60px rgba(0,0,0,.5);
+  --gap:10px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Apple SD Gothic Neo","Pretendard","Noto Sans KR",Roboto,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#ECEEF2;
+  --surface:#FFFFFF;
+  --surface-hi:#F3F4F7;
+  --seg-on:#FFFFFF;
+  --line:rgba(15,20,30,.08);
+  --text:#12141A;
+  --muted:#6A7080;
+  --faint:#C9CDD5;
+  --a:#EE4136; --a-soft:rgba(238,65,54,.10);
+  --b:#2F74E8; --b-soft:rgba(47,116,232,.10);
+  --ok:#34C759;
+  --sheet:#FFFFFF;
+  --backdrop:rgba(20,24,32,.35);
+  --shadow:0 20px 60px rgba(20,24,32,.18);
+  color-scheme:light;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+body{position:fixed;inset:0;overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button:disabled{opacity:.35;cursor:default}
+input{font:inherit;-webkit-user-select:text;user-select:text}
+svg{display:block}
+
+/* ---------- Board layout ---------- */
+.app{
+  position:fixed;inset:0;display:grid;gap:var(--gap);
+  padding:calc(env(safe-area-inset-top) + var(--gap)) calc(env(safe-area-inset-right) + var(--gap)) calc(env(safe-area-inset-bottom) + var(--gap)) calc(env(safe-area-inset-left) + var(--gap));
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr) auto minmax(0,1fr);
+}
+@media (orientation:landscape){
+  .app{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+}
+
+/* ---------- Player panel ---------- */
+.panel{
+  --c:var(--a);--c-soft:var(--a-soft);
+  position:relative;min-width:0;min-height:0;container-type:size;
+  display:flex;flex-direction:column;
+  padding:clamp(12px,3vmin,28px);
+  border-radius:clamp(20px,4vmin,34px);
+  background:radial-gradient(120% 85% at 50% 0%,var(--c-soft),transparent 70%),var(--surface);
+  box-shadow:inset 0 0 0 1px var(--line);
+  text-align:center;overflow:hidden;cursor:pointer;outline:none;
+  transition:box-shadow .25s ease,transform .12s ease,filter .12s ease;
+  view-transition-name:panel-a;
+}
+.panel[data-player="1"]{--c:var(--b);--c-soft:var(--b-soft);view-transition-name:panel-b}
+.panel:active{transform:scale(.985);filter:brightness(1.08)}
+.panel:focus-visible{box-shadow:inset 0 0 0 1px var(--line),0 0 0 3px var(--c)}
+.panel.serving{box-shadow:inset 0 0 0 2px var(--c)}
+
+.p-head{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.8cqmin,14px)}
+.p-name{max-width:100%;font-size:clamp(16px,6.4cqmin,44px);font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-serve{
+  display:inline-flex;align-items:center;gap:.45em;height:2.15em;padding:0 .95em;border-radius:999px;
+  font-size:clamp(12px,4cqmin,20px);font-weight:700;color:#fff;background:var(--c);
+  opacity:0;transform:scale(.88);transition:opacity .2s ease,transform .2s ease;
+}
+.panel.serving .p-serve{opacity:1;transform:none}
+.ball{width:.75em;height:.75em;border-radius:50%;background:#fff;box-shadow:inset -.12em -.12em 0 rgba(0,0,0,.14)}
+.p-serve-n{font-weight:600;opacity:.8;font-variant-numeric:tabular-nums}
+.p-serve-n:empty{display:none}
+
+.p-score{flex:1 1 0;min-height:0;container-type:size;display:grid;place-items:center}
+.num{
+  font-size:min(118cqh,66cqw);line-height:.8;font-weight:700;letter-spacing:-.045em;
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;
+  padding-right:.045em;
+}
+.num.bump{animation:bump .22s ease}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+.p-foot{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.8cqmin,12px)}
+.p-tag{font-size:clamp(11px,3.6cqmin,18px);font-weight:700;letter-spacing:.06em;color:var(--c);min-height:1.3em;line-height:1.3em;opacity:0;transition:opacity .2s}
+.p-tag.on{opacity:1}
+.p-tag.neutral{color:var(--muted)}
+.p-pips{display:flex;gap:clamp(6px,2cqmin,12px)}
+.p-pips i{width:clamp(9px,2.8cqmin,16px);aspect-ratio:1;border-radius:50%;box-shadow:inset 0 0 0 2px var(--faint);transition:background .2s,box-shadow .2s}
+.p-pips i.on{background:var(--c);box-shadow:none}
+
+/* ---------- Spine (controls between panels) ---------- */
+.spine{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:52px;padding:0 2px;order:2}
+.sp-info{display:flex;flex-direction:column;gap:1px;min-width:0;padding-left:4px}
+.sp-game{display:flex;align-items:baseline;gap:5px;font-weight:700}
+.sp-game-l{font-size:12px;letter-spacing:.12em;color:var(--muted)}
+.sp-game-n{font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums}
+.sp-fmt{font-size:12px;color:var(--muted);white-space:nowrap}
+.sp-actions{display:flex;align-items:center;gap:8px}
+.icon-btn{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);transition:transform .1s,background .15s}
+.icon-btn:active,.undo:active{transform:scale(.94)}
+.icon-btn svg,.undo svg{width:22px;height:22px}
+.undo{height:48px;padding:0 18px 0 14px;border-radius:999px;display:flex;align-items:center;gap:8px;background:var(--surface-hi);box-shadow:inset 0 0 0 1px var(--line);font-size:15px;font-weight:650;white-space:nowrap;transition:transform .1s}
+
+@media (orientation:landscape){
+  .spine{flex-direction:column;justify-content:space-between;width:76px;padding:6px 0}
+  .sp-info{align-items:center;gap:4px;text-align:center;padding-left:0}
+  .sp-game{flex-direction:column;align-items:center;gap:0}
+  .sp-game-l{font-size:11px}
+  .sp-game-n{font-size:30px;line-height:1.1}
+  .sp-fmt{font-size:11px;white-space:normal;max-width:64px;line-height:1.35}
+  .sp-actions{flex-direction:column-reverse;gap:10px}
+  .undo{flex-direction:column;justify-content:center;gap:4px;width:68px;height:72px;padding:0;border-radius:20px;font-size:11px}
+  .undo svg{width:24px;height:24px}
+}
+
+/* Tablets: scale the controls with the screen */
+@media (min-width:700px) and (min-height:700px){
+  :root{--gap:14px}
+  .spine{min-height:68px;padding:0 6px}
+  .sp-game-l{font-size:14px}
+  .sp-game-n{font-size:30px}
+  .sp-fmt{font-size:14px}
+  .sp-actions{gap:12px}
+  .icon-btn{width:60px;height:60px}
+  .icon-btn svg,.undo svg{width:26px;height:26px}
+  .undo{height:60px;padding:0 24px 0 20px;font-size:17px;gap:10px}
+}
+@media (orientation:landscape) and (min-width:700px) and (min-height:700px){
+  .spine{width:104px;padding:10px 0}
+  .sp-game-l{font-size:13px}
+  .sp-game-n{font-size:44px}
+  .sp-fmt{font-size:13px;max-width:96px}
+  .sp-actions{gap:14px}
+  .undo{width:92px;height:96px;padding:0;border-radius:26px;font-size:14px;gap:6px}
+  .undo svg{width:30px;height:30px}
+}
+
+/* ---------- Toast ---------- */
+.toast{
+  position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 18px);z-index:60;
+  transform:translate(-50%,-12px);opacity:0;pointer-events:none;
+  padding:11px 18px;border-radius:999px;background:var(--text);color:var(--bg);
+  font-size:15px;font-weight:650;white-space:nowrap;box-shadow:var(--shadow);
+  transition:opacity .2s,transform .2s;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- Result modal ---------- */
+.modal{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:20px;background:var(--backdrop);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;transition:opacity .22s}
+.modal.open{opacity:1}
+.m-card{width:100%;max-width:420px;max-height:100%;overflow:auto;padding:28px 24px 22px;border-radius:28px;background:var(--sheet);box-shadow:var(--shadow);text-align:center;transform:translateY(12px) scale(.98);transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.modal.open .m-card{transform:none}
+.m-eyebrow{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--muted)}
+.m-title{margin-top:10px;font-size:24px;font-weight:700;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-score{margin-top:6px;font-size:68px;font-weight:700;letter-spacing:-.03em;line-height:1.05;font-variant-numeric:tabular-nums}
+.m-score i{font-style:normal;color:var(--muted);margin:0 .12em;font-weight:500}
+.m-label{margin-top:16px;font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.m-row{margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:16px;font-weight:600}
+.m-row .nm{max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-row b{font-size:22px;font-variant-numeric:tabular-nums}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--a)}
+.dot.b{background:var(--b)}
+.m-games{margin-top:12px;display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.m-games span{padding:6px 10px;border-radius:10px;background:var(--surface-hi);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--muted)}
+.m-games b{color:var(--text)}
+.m-actions{margin-top:24px;display:grid;grid-template-columns:1fr 1.6fr;gap:10px}
+.m-note{margin-top:14px;font-size:13px;color:var(--muted);line-height:1.45}
+.m-note:empty{display:none}
+
+.btn{height:54px;border-radius:16px;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .1s,opacity .15s}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--text);color:var(--bg)}
+.btn.ghost{background:var(--surface-hi);box-shadow:inset 0 0 0 1px var(--line)}
+.btn.danger{background:transparent;color:var(--a);box-shadow:inset 0 0 0 1px var(--line)}
+.btn.block{width:100%}
+
+/* ---------- Sheets ---------- */
+.sheet-wrap{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center;background:var(--backdrop);opacity:0;transition:opacity .22s}
+.sheet-wrap.open{opacity:1}
+.sheet{
+  width:100%;max-width:520px;max-height:calc(100vh - 16px);max-height:calc(100dvh - env(safe-area-inset-top) - 16px);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+  background:var(--sheet);border-radius:28px 28px 0 0;box-shadow:var(--shadow);
+  padding:8px calc(20px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+  transform:translateY(28px);transition:transform .28s cubic-bezier(.2,.8,.2,1);
+}
+.sheet-wrap.open .sheet{transform:none}
+@media (min-width:600px) and (min-height:600px){
+  .sheet-wrap{align-items:center;padding:24px}
+  .sheet{border-radius:28px;padding:8px 24px 24px}
+}
+.sh-head{position:sticky;top:-8px;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0 10px;background:var(--sheet)}
+.sh-title{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.sh-close{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--surface-hi)}
+.sh-close svg{width:18px;height:18px}
+.label{margin:20px 0 8px;font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--muted)}
+.name-row{display:flex;align-items:center;gap:12px;height:54px;padding:0 16px;border-radius:14px;background:var(--surface-hi);box-shadow:inset 0 0 0 1px var(--line)}
+.name-row+.name-row{margin-top:8px}
+.name-row input{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;color:var(--text);font-size:17px;font-weight:600}
+.name-row input::placeholder{color:var(--muted);font-weight:500}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px;padding:4px;border-radius:14px;background:var(--surface-hi);box-shadow:inset 0 0 0 1px var(--line)}
+.seg button{min-height:48px;padding:6px 8px;border-radius:10px;font-size:15px;font-weight:650;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px;overflow:hidden}
+.seg button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg button small{display:block;font-size:12px;font-weight:600;opacity:.75}
+.seg button.col{flex-direction:column;gap:1px}
+.seg button[aria-pressed="true"]{background:var(--seg-on);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.18),inset 0 0 0 1px var(--line)}
+.sh-note{margin-top:14px;font-size:13px;color:var(--muted);line-height:1.5}
+.sh-actions{margin-top:24px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+.list{border-radius:16px;background:var(--surface-hi);box-shadow:inset 0 0 0 1px var(--line);padding:0 16px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:60px;padding:10px 0}
+.row+.row{border-top:1px solid var(--line)}
+.row-t{font-size:16px;font-weight:600}
+.row-d{margin-top:3px;font-size:13px;color:var(--muted);line-height:1.4}
+.row-d.ok{color:var(--ok)}
+.switch{position:relative;flex:none;width:52px;height:32px}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.switch span{position:absolute;inset:0;border-radius:999px;background:var(--faint);transition:background .2s}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s cubic-bezier(.2,.8,.2,1)}
+.switch input:checked+span{background:var(--ok)}
+.switch input:checked+span::after{transform:translateX(20px)}
+
+.history{display:grid;gap:6px}
+.h-row{display:grid;grid-template-columns:auto 1fr auto 1fr;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--surface-hi);font-variant-numeric:tabular-nums}
+.h-g{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.h-s{font-size:17px;font-weight:600;color:var(--muted)}
+.h-s.l{text-align:right}
+.h-s.win{color:var(--text);font-weight:700}
+.h-x{color:var(--muted)}
+.h-empty{font-size:14px;color:var(--muted);padding:6px 2px}
+.install{margin-top:20px;padding:14px 16px;border-radius:14px;background:var(--surface-hi);font-size:14px;line-height:1.55;color:var(--muted)}
+.install b{color:var(--text)}
+.foot{margin-top:18px;font-size:12px;color:var(--muted);text-align:center}
+
+::view-transition-group(*){animation-duration:.38s;animation-timing-function:cubic-bezier(.2,.8,.2,1)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<main class="app" id="app">
+  <div class="panel" data-player="0" role="button" tabindex="0">
+    <div class="p-head">
+      <div class="p-name"></div>
+      <div class="p-serve" aria-hidden="true"><i class="ball"></i><span>서브</span><b class="p-serve-n"></b></div>
+    </div>
+    <div class="p-score"><span class="num">0</span></div>
+    <div class="p-foot">
+      <div class="p-tag"></div>
+      <div class="p-pips"></div>
+    </div>
+  </div>
+
+  <div class="spine">
+    <div class="sp-info">
+      <div class="sp-game"><span class="sp-game-l">GAME</span><span class="sp-game-n" id="gameNo">1</span></div>
+      <div class="sp-fmt" id="fmt"></div>
+    </div>
+    <div class="sp-actions">
+      <button class="undo" id="undoBtn" aria-label="되돌리기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        <span>되돌리기</span>
+      </button>
+      <button class="icon-btn" id="swapBtn" aria-label="좌우 바꾸기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/></svg>
+      </button>
+      <button class="icon-btn" id="menuBtn" aria-label="메뉴">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel" data-player="1" role="button" tabindex="0">
+    <div class="p-head">
+      <div class="p-name"></div>
+      <div class="p-serve" aria-hidden="true"><i class="ball"></i><span>서브</span><b class="p-serve-n"></b></div>
+    </div>
+    <div class="p-score"><span class="num">0</span></div>
+    <div class="p-foot">
+      <div class="p-tag"></div>
+      <div class="p-pips"></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Game / match result -->
+<div class="modal" id="modal" hidden>
+  <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="m-eyebrow" id="mEyebrow"></div>
+    <div class="m-title" id="mTitle"></div>
+    <div class="m-score" id="mScore"></div>
+    <div class="m-label">게임 스코어</div>
+    <div class="m-row" id="mRow"></div>
+    <div class="m-games" id="mGames"></div>
+    <div class="m-actions">
+      <button class="btn ghost" id="mUndo">되돌리기</button>
+      <button class="btn primary" id="mNext"></button>
+    </div>
+    <div class="m-note" id="mNote"></div>
+  </div>
+</div>
+
+<!-- New match -->
+<div class="sheet-wrap" id="setup" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <div class="sh-head">
+      <div class="sh-title" id="setupTitle">새 매치</div>
+      <button class="sh-close" data-close aria-label="닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="label">선수 이름</div>
+    <label class="name-row"><span class="dot"></span><input id="sName0" maxlength="14" placeholder="선수 A" autocomplete="off" enterkeyhint="next"></label>
+    <label class="name-row"><span class="dot b"></span><input id="sName1" maxlength="14" placeholder="선수 B" autocomplete="off" enterkeyhint="done"></label>
+    <div class="label">경기 방식</div>
+    <div class="seg" id="sFormat">
+      <button class="col" data-v="3">3게임<small>2선승</small></button>
+      <button class="col" data-v="5">5게임<small>3선승</small></button>
+      <button class="col" data-v="7">7게임<small>4선승</small></button>
+    </div>
+    <div class="label">첫 서브</div>
+    <div class="seg" id="sFirst">
+      <button data-v="0"><span class="dot"></span><span></span></button>
+      <button data-v="1"><span class="dot b"></span><span></span></button>
+    </div>
+    <div class="sh-note" id="sNote">진행 중인 경기 기록은 지워져요.</div>
+    <div class="sh-actions"><button class="btn primary block" id="startBtn">경기 시작</button></div>
+  </div>
+</div>
+
+<!-- Menu -->
+<div class="sheet-wrap" id="menu" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+    <div class="sh-head">
+      <div class="sh-title" id="menuTitle">메뉴</div>
+      <button class="sh-close" data-close aria-label="닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="label">선수 이름</div>
+    <label class="name-row"><span class="dot"></span><input id="mName0" maxlength="14" placeholder="선수 A" autocomplete="off" enterkeyhint="next"></label>
+    <label class="name-row"><span class="dot b"></span><input id="mName1" maxlength="14" placeholder="선수 B" autocomplete="off" enterkeyhint="done"></label>
+
+    <div class="label">경기</div>
+    <div class="grid2">
+      <button class="btn ghost" id="flipServeBtn">서브 바꾸기</button>
+      <button class="btn ghost" id="newMatchBtn">새 매치</button>
+    </div>
+
+    <div class="label">설정</div>
+    <div class="list">
+      <div class="row">
+        <div><div class="row-t">엔드 자동 교체</div><div class="row-d">게임이 끝나면 좌우를 바꿔요</div></div>
+        <label class="switch"><input type="checkbox" id="optSwap" aria-label="엔드 자동 교체"><span></span></label>
+      </div>
+      <div class="row">
+        <div><div class="row-t">화면 꺼짐 방지</div><div class="row-d" id="wakeStatus"></div></div>
+        <label class="switch"><input type="checkbox" id="optWake" aria-label="화면 꺼짐 방지"><span></span></label>
+      </div>
+      <div class="row" id="hapticRow">
+        <div><div class="row-t">진동</div><div class="row-d">득점할 때 짧게 진동해요</div></div>
+        <label class="switch"><input type="checkbox" id="optHaptic" aria-label="진동"><span></span></label>
+      </div>
+      <div class="row">
+        <div><div class="row-t">라이트 모드</div><div class="row-d">밝은 체육관에서 잘 보여요</div></div>
+        <label class="switch"><input type="checkbox" id="optLight" aria-label="라이트 모드"><span></span></label>
+      </div>
+    </div>
+
+    <div class="label">게임 기록</div>
+    <div class="history" id="historyList"></div>
+
+    <div class="install" id="installBox" hidden></div>
+    <div class="foot">탭: 득점 · 키보드 ← → 득점, Z 되돌리기</div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- Storage ---------- */
+const KEY = { state:'ppscore.v1.state', hist:'ppscore.v1.history', settings:'ppscore.v1.settings' };
+const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+const store = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+const FORMAT = { 3:'3게임 2선승', 5:'5게임 3선승', 7:'7게임 4선승' };
+const DEFAULT_NAMES = ['선수 A', '선수 B'];
+
+const newMatch = (names = DEFAULT_NAMES, bestOf = 5, firstServer = 0) => ({
+  names: [...names], bestOf, firstServer,
+  score: [0, 0],
+  games: [],            // finished games: { s:[a,b], w:winner }
+  phase: 'play',        // play | gameOver | matchOver
+  flips: 0,             // automatic end changes (part of undo history)
+  manualSwap: false,    // manual left/right swap (kept across undo)
+  midSwapDone: false,
+});
+
+let settings = { autoSwap: true, wakeLock: true, haptics: true, theme: 'dark', ...load(KEY.settings, {}) };
+let state = load(KEY.state, null);
+let history = load(KEY.hist, []);
+const firstRun = !state;
+if (!state) state = newMatch();
+
+/* ---------- Rules ---------- */
+const need = () => Math.floor(state.bestOf / 2) + 1;
+const wins = () => state.games.reduce((w, g) => (w[g.w]++, w), [0, 0]);
+const nameOf = p => (state.names[p] || '').trim() || DEFAULT_NAMES[p];
+const isSwapped = () => (state.flips % 2 === 1) !== !!state.manualSwap;
+const playerAtSlot = slot => (isSwapped() ? 1 - slot : slot);
+const totalPoints = () => state.score[0] + state.score[1];
+const isDeuce = () => state.score[0] >= 10 && state.score[0] === state.score[1];
+const isDecider = () => { const w = wins(), n = need(); return w[0] === n - 1 && w[1] === n - 1; };
+
+// Service alternates every 2 points; from 10–10 it alternates every point.
+// The player who served first in a game receives first in the next one.
+function server() {
+  const first = (state.firstServer + state.games.length) % 2;
+  const t = totalPoints();
+  const turns = t < 20 ? Math.floor(t / 2) : 10 + (t - 20);
+  return (first + turns) % 2;
+}
+const serveNo = () => (totalPoints() >= 20 ? 0 : (totalPoints() % 2) + 1);
+
+/* ---------- Actions ---------- */
+const lastTap = [0, 0];
+
+function snapshot() {
+  history.push(JSON.stringify(state));
+  if (history.length > 600) history.shift();
+}
+
+function point(p) {
+  if (state.phase !== 'play') return;
+  const now = performance.now();
+  if (now - lastTap[p] < 280) return;          // swallow accidental double taps
+  lastTap[p] = now;
+  snapshot();
+  const s = state.score, o = 1 - p;
+  s[p]++;
+  let msg = '';
+  if (s[p] >= 11 && s[p] - s[o] >= 2) {
+    state.games.push({ s: [s[0], s[1]], w: p });
+    state.phase = wins()[p] >= need() ? 'matchOver' : 'gameOver';
+    haptic([18, 50, 18]);
+  } else {
+    if (isDecider() && !state.midSwapDone && s[p] === 5) {
+      // Deciding game: players change ends when one of them first reaches 5.
+      state.midSwapDone = true;
+      if (settings.autoSwap) { state.flips++; msg = '엔드 교체 · 마지막 게임 5점'; }
+      else msg = '엔드를 바꾸세요 · 마지막 게임 5점';
+    }
+    haptic(12);
+  }
+  commit();
+  bump(p);
+  if (msg) toast(msg);
+  ensureWakeLock();
+}
+
+function nextGame() {
+  if (state.phase !== 'gameOver') return;
+  snapshot();
+  state.score = [0, 0];
+  state.phase = 'play';
+  state.midSwapDone = false;
+  if (settings.autoSwap) state.flips++;
+  commit();
+  toast(settings.autoSwap ? `GAME ${state.games.length + 1} · 엔드 교체` : `GAME ${state.games.length + 1} 시작`);
+}
+
+function undo() {
+  if (!history.length) return;
+  // Names, first-server fixes and manual swaps are corrections, not plays — keep them.
+  const keep = { names: state.names, firstServer: state.firstServer, manualSwap: state.manualSwap };
+  state = { ...JSON.parse(history.pop()), ...keep };
+  lastTap[0] = lastTap[1] = 0;
+  commit();
+  haptic(8);
+}
+
+function startMatch(names, bestOf, first) {
+  state = newMatch(names, bestOf, first);
+  history = [];
+  lastTap[0] = lastTap[1] = 0;
+  commit();
+}
+
+/* ---------- Rendering ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => s.replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const P = [...document.querySelectorAll('.panel')].map(el => ({
+  el, name: $('.p-name', el), num: $('.num', el), serveN: $('.p-serve-n', el), tag: $('.p-tag', el), pips: $('.p-pips', el),
+}));
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let shownSwap = null;
+
+function commit() {
+  store(KEY.state, state);
+  store(KEY.hist, history);
+  const sw = isSwapped();
+  if (shownSwap !== null && sw !== shownSwap && document.startViewTransition && !reduceMotion) {
+    document.startViewTransition(render).ready.catch(() => {}); // skipped when the page is hidden
+  } else render();
+}
+
+function render() {
+  shownSwap = isSwapped();
+  const w = wins(), n = need();
+  const playing = state.phase === 'play';
+  const srv = playing ? server() : -1;
+  const sNo = serveNo();
+  const deuce = playing && isDeuce();
+
+  P.forEach((v, p) => {
+    const o = 1 - p, s = state.score;
+    v.el.style.order = playerAtSlot(0) === p ? 1 : 3;
+    v.name.textContent = nameOf(p);
+    v.num.textContent = s[p];
+    v.el.classList.toggle('serving', srv === p);
+    v.serveN.textContent = sNo ? `${sNo}/2` : '';
+    let tag = '';
+    if (playing && s[p] >= 10 && s[p] > s[o]) tag = w[p] === n - 1 ? '매치 포인트' : '게임 포인트';
+    else if (deuce) tag = '듀스';
+    v.tag.textContent = tag || '·';
+    v.tag.classList.toggle('on', !!tag);
+    v.tag.classList.toggle('neutral', tag === '듀스');
+    v.pips.innerHTML = Array.from({ length: n }, (_, i) => `<i class="${i < w[p] ? 'on' : ''}"></i>`).join('');
+    v.el.setAttribute('aria-label', `${nameOf(p)} ${s[p]}점, 게임 ${w[p]}승${srv === p ? ', 서브' : ''}. 탭하면 1점 추가`);
+  });
+
+  $('#gameNo').textContent = playing ? state.games.length + 1 : state.games.length;
+  $('#fmt').textContent = FORMAT[state.bestOf];
+  $('#undoBtn').disabled = !history.length;
+  renderModal();
+  renderHistory();
+}
+
+function bump(p) {
+  const el = P[p].num;
+  el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+}
+
+/* ---------- Result modal ---------- */
+const modal = $('#modal');
+function renderModal() {
+  if (state.phase === 'play') return hide(modal);
+  const g = state.games[state.games.length - 1];
+  const w = wins();
+  const isMatch = state.phase === 'matchOver';
+  const L = playerAtSlot(0), R = playerAtSlot(1);
+  const dot = p => `<span class="dot${p ? ' b' : ''}"></span>`;
+  $('#mEyebrow').textContent = isMatch ? '매치 종료' : `GAME ${state.games.length} 종료`;
+  $('#mTitle').innerHTML = `<span style="color:var(--${g.w ? 'b' : 'a'})">${esc(nameOf(g.w))}</span> 승리`;
+  $('#mScore').innerHTML = isMatch
+    ? `${w[g.w]}<i>:</i>${w[1 - g.w]}`
+    : `${g.s[g.w]}<i>:</i>${g.s[1 - g.w]}`;
+  $('#mRow').innerHTML = `${dot(L)}<span class="nm">${esc(nameOf(L))}</span><b>${w[L]}</b><span>:</span><b>${w[R]}</b><span class="nm">${esc(nameOf(R))}</span>${dot(R)}`;
+  $('#mGames').innerHTML = state.games.map(x =>
+    `<span>${x.w === L ? `<b>${x.s[L]}</b>` : x.s[L]}–${x.w === R ? `<b>${x.s[R]}</b>` : x.s[R]}</span>`).join('');
+  $('#mGames').hidden = !isMatch;
+  $('#mNext').textContent = isMatch ? '새 매치' : `GAME ${state.games.length + 1} 시작`;
+  let note = '';
+  if (!isMatch) {
+    const nextIsDecider = w[0] === need() - 1 && w[1] === need() - 1;
+    if (settings.autoSwap) note = '다음 게임은 좌우(엔드)를 바꿔 시작해요.';
+    if (nextIsDecider) note += (note ? ' ' : '') + '마지막 게임은 5점에서 엔드를 한 번 더 바꿔요.';
+  }
+  $('#mNote').textContent = note;
+  show(modal);
+}
+$('#mUndo').addEventListener('click', undo);
+$('#mNext').addEventListener('click', () => state.phase === 'matchOver' ? openSetup() : nextGame());
+
+/* ---------- Show / hide helpers ---------- */
+function show(el) {
+  if (!el.hidden && el.classList.contains('open')) return;
+  clearTimeout(el._t);
+  el.hidden = false;
+  void el.offsetWidth; // flush layout so the fade-in transition runs
+  el.classList.add('open');
+}
+function hide(el) {
+  if (el.hidden) return;
+  el.classList.remove('open');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.hidden = true; }, reduceMotion ? 0 : 240);
+}
+
+/* ---------- Toast ---------- */
+const toastEl = $('#toast');
+let toastT;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => toastEl.classList.remove('show'), 2400);
+}
+
+/* ---------- Haptics ---------- */
+const canVibrate = typeof navigator.vibrate === 'function';
+function haptic(pattern) { if (settings.haptics && canVibrate) try { navigator.vibrate(pattern); } catch {} }
+
+/* ---------- Wake lock ---------- */
+let wakeLock = null, wakePending = false;
+async function ensureWakeLock() {
+  if (!settings.wakeLock || wakeLock || wakePending || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  wakePending = true;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; renderWake(); });
+  } catch { wakeLock = null; }
+  wakePending = false;
+  renderWake();
+}
+function releaseWakeLock() { if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; } renderWake(); }
+function renderWake() {
+  const el = $('#wakeStatus');
+  el.classList.remove('ok');
+  if (!('wakeLock' in navigator)) {
+    el.textContent = window.isSecureContext ? '이 브라우저는 지원하지 않아요. 기기의 자동 잠금을 꺼 주세요.' : 'HTTPS 주소에서만 동작해요.';
+  } else if (!settings.wakeLock) el.textContent = '꺼짐';
+  else if (wakeLock) { el.textContent = '켜짐 · 경기 중 화면이 꺼지지 않아요'; el.classList.add('ok'); }
+  else el.textContent = '화면을 한 번 탭하면 켜져요';
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ensureWakeLock(); });
+
+/* ---------- Board input ---------- */
+P.forEach((v, p) => {
+  v.el.addEventListener('click', () => point(p));
+  v.el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); point(p); } });
+  v.el.addEventListener('contextmenu', e => e.preventDefault());
+});
+document.addEventListener('touchstart', () => {}, { passive: true }); // enables :active on iOS
+$('#undoBtn').addEventListener('click', undo);
+$('#swapBtn').addEventListener('click', () => { state.manualSwap = !state.manualSwap; commit(); });
+$('#menuBtn').addEventListener('click', openMenu);
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input')) return;
+  const k = e.key.toLowerCase();
+  if (!setupEl.hidden || !menuEl.hidden) { if (k === 'escape') { hide(setupEl); hide(menuEl); } return; }
+  if (k === 'z' || k === 'backspace' || k === 'u') { e.preventDefault(); return undo(); }
+  if (state.phase !== 'play') {
+    if (k === 'enter' || k === ' ') { e.preventDefault(); $('#mNext').click(); }
+    return;
+  }
+  if (k === 'arrowleft' || k === 'arrowup' || k === 'a') { e.preventDefault(); point(playerAtSlot(0)); }
+  else if (k === 'arrowright' || k === 'arrowdown' || k === 'l') { e.preventDefault(); point(playerAtSlot(1)); }
+});
+
+/* ---------- New match sheet ---------- */
+const setupEl = $('#setup');
+const setup = { bestOf: 5, first: 0 };
+function syncSeg(id, v) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === v))); }
+function syncFirstLabels() {
+  document.querySelectorAll('#sFirst button').forEach((b, i) => {
+    b.lastElementChild.textContent = $(`#sName${i}`).value.trim() || DEFAULT_NAMES[i];
+  });
+}
+function openSetup() {
+  hide(menuEl);
+  $('#sName0').value = state.names[0] === DEFAULT_NAMES[0] ? '' : state.names[0];
+  $('#sName1').value = state.names[1] === DEFAULT_NAMES[1] ? '' : state.names[1];
+  setup.bestOf = state.bestOf; setup.first = 0;
+  syncSeg('sFormat', setup.bestOf); syncSeg('sFirst', setup.first); syncFirstLabels();
+  $('#sNote').hidden = !(history.length && state.phase !== 'matchOver');
+  show(setupEl);
+}
+document.querySelectorAll('#sFormat button').forEach(b => b.addEventListener('click', () => { setup.bestOf = +b.dataset.v; syncSeg('sFormat', setup.bestOf); }));
+document.querySelectorAll('#sFirst button').forEach(b => b.addEventListener('click', () => { setup.first = +b.dataset.v; syncSeg('sFirst', setup.first); }));
+['sName0', 'sName1'].forEach(id => $(`#${id}`).addEventListener('input', syncFirstLabels));
+$('#sName0').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sName1').focus(); });
+$('#sName1').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+$('#startBtn').addEventListener('click', () => {
+  const names = [0, 1].map(i => $(`#sName${i}`).value.trim() || DEFAULT_NAMES[i]);
+  startMatch(names, setup.bestOf, setup.first);
+  hide(setupEl);
+  toast('선수 쪽 화면을 탭하면 1점이 올라가요');
+  ensureWakeLock();
+});
+
+/* ---------- Menu sheet ---------- */
+const menuEl = $('#menu');
+function openMenu() {
+  [0, 1].forEach(i => { $(`#mName${i}`).value = state.names[i] === DEFAULT_NAMES[i] ? '' : state.names[i]; });
+  $('#optSwap').checked = settings.autoSwap;
+  $('#optWake').checked = settings.wakeLock;
+  $('#optHaptic').checked = settings.haptics;
+  $('#optLight').checked = settings.theme === 'light';
+  $('#hapticRow').hidden = !canVibrate;
+  renderWake();
+  renderInstall();
+  show(menuEl);
+}
+[0, 1].forEach(i => {
+  const input = $(`#mName${i}`);
+  input.addEventListener('input', () => { state.names[i] = input.value.trim() || DEFAULT_NAMES[i]; commit(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') i ? input.blur() : $('#mName1').focus(); });
+});
+$('#flipServeBtn').addEventListener('click', () => {
+  state.firstServer = 1 - state.firstServer;
+  commit();
+  hide(menuEl);
+  toast(state.phase === 'play' ? `서브: ${nameOf(server())}` : '서브 순서를 바꿨어요');
+});
+$('#newMatchBtn').addEventListener('click', openSetup);
+const saveSettings = () => store(KEY.settings, settings);
+$('#optSwap').addEventListener('change', e => { settings.autoSwap = e.target.checked; saveSettings(); });
+$('#optHaptic').addEventListener('change', e => { settings.haptics = e.target.checked; saveSettings(); haptic(12); });
+$('#optWake').addEventListener('change', e => {
+  settings.wakeLock = e.target.checked; saveSettings();
+  settings.wakeLock ? ensureWakeLock() : releaseWakeLock();
+  renderWake();
+});
+$('#optLight').addEventListener('change', e => { settings.theme = e.target.checked ? 'light' : 'dark'; saveSettings(); applyTheme(); });
+
+function renderHistory() {
+  const el = $('#historyList');
+  if (!state.games.length) { el.innerHTML = '<div class="h-empty">아직 끝난 게임이 없어요.</div>'; return; }
+  const L = playerAtSlot(0), R = playerAtSlot(1);
+  el.innerHTML = state.games.map((g, i) =>
+    `<div class="h-row"><span class="h-g">GAME ${i + 1}</span><span class="h-s l${g.w === L ? ' win' : ''}">${esc(nameOf(L))} ${g.s[L]}</span><span class="h-x">:</span><span class="h-s${g.w === R ? ' win' : ''}">${g.s[R]} ${esc(nameOf(R))}</span></div>`).join('');
+}
+
+document.querySelectorAll('.sheet-wrap').forEach(wrap => {
+  wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-close]')) hide(wrap); });
+});
+
+/* ---------- Theme ---------- */
+function applyTheme() {
+  document.documentElement.dataset.theme = settings.theme;
+  $('meta[name="theme-color"]').setAttribute('content', settings.theme === 'light' ? '#ECEEF2' : '#0A0B0E');
+}
+
+/* ---------- Install (PWA) ---------- */
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
+function renderInstall() {
+  const box = $('#installBox');
+  if (isStandalone()) { box.hidden = true; return; }
+  box.hidden = false;
+  if (installPrompt) {
+    box.innerHTML = '<b>홈 화면에 설치</b>하면 전체 화면으로 쓰고, 인터넷 없이도 열려요.<div style="margin-top:12px"><button class="btn primary block" id="installBtn">앱 설치</button></div>';
+    $('#installBtn').addEventListener('click', async () => { installPrompt.prompt(); await installPrompt.userChoice.catch(() => {}); installPrompt = null; renderInstall(); });
+  } else if (isIOS) {
+    box.innerHTML = 'Safari 아래쪽 <b>공유 버튼</b> → <b>홈 화면에 추가</b>를 누르면 앱처럼 전체 화면으로 쓸 수 있어요.';
+  } else {
+    box.innerHTML = '브라우저 메뉴(⋮)에서 <b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 누르면 앱처럼 쓸 수 있어요.';
+  }
+}
+
+/* ---------- Boot ---------- */
+applyTheme();
+render();
+renderWake();
+if (firstRun) openSetup(); else ensureWakeLock();
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+})();
+</script>
+</body>
+</html>

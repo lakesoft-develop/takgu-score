@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "탁구 스코어",
+  "short_name": "탁구 스코어",
+  "description": "탁구 경기 점수판 — 11점 듀스, 서브 순서, 게임 스코어를 자동으로 계산해요.",
+  "lang": "ko",
+  "dir": "ltr",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#0A0B0E",
+  "theme_color": "#0A0B0E",
+  "categories": ["sports", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
